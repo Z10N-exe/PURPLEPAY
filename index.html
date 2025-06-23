@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurplePay - Mobile Banking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4a1d96',
+                        secondary: '#a855f7',
+                        accent: '#e9d5ff',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f5f3ff;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .receipt {
+            background: linear-gradient(135deg, #f5f3ff 0%, #e9d5ff 100%);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .receipt::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, #4a1d96, #a855f7);
+        }
+        
+        .dotted-line {
+            border-top: 2px dashed #ddd;
+            margin: 15px 0;
+        }
+        
+        .transaction-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-item.active {
+            color: #4a1d96;
+            border-bottom: 3px solid #4a1d96;
+        }
+        
+        .input-field:focus {
+            border-color: #a855f7;
+            box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+        }
+        
+        /* Animation for buttons */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse:hover {
+            animation: pulse 1s infinite;
+        }
+        
+        /* Confetti styles */
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+            z-index: 9999;
+            animation: confetti-fall 3s ease-in-out forwards;
+        }
+        
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        
+        /* Notification styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            z-index: 1000;
+            transform: translateX(200%);
+            transition: transform 0.3s ease;
+            max-width: 300px;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Notification -->
+    <div class="notification hidden" id="notification">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <i class="fas fa-money-bill-wave text-green-600"></i>
+                </div>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-gray-900" id="notificationTitle">Credit Alert</h3>
+                <p class="text-sm text-gray-500 mt-1" id="notificationMessage">₦15,000.00 has been credited to your account</p>
+                <p class="text-xs text-gray-400 mt-1" id="notificationTime">Just now</p>
+            </div>
+            <button class="ml-4 text-gray-400 hover:text-gray-500" onclick="hideNotification()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg overflow-hidden relative" id="app">
+        <!-- Login Screen -->
+        <div class="p-6 pt-16 h-screen" id="loginScreen">
+            <div class="text-center mb-10">
+                <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-wallet text-white text-3xl"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-primary">PurplePay</h1>
+                <p class="text-gray-500 mt-2">Your secure mobile banking solution</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label for="senderName" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                    <input type="text" id="senderName" class="input-field w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Enter your name" required>
+                </div>
+                
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500">+234</span>
+                        </div>
+                        <input type="tel" id="phone" class="input-field pl-16 w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="8012345678" required>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="pin" class="block text-sm font-medium text-gray-700 mb-1">PIN</label>
+                    <input type="password" id="pin" class="input-field w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="••••" maxlength="4" required>
+                </div>
+                
+                <button type="submit" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                    Sign In
+                </button>
+                
+                <div class="text-center text-sm text-gray-500">
+                    <a href="#" class="text-primary font-medium">Forgot PIN?</a>
+                </div>
+            </form>
+            
+            <div class="absolute bottom-6 left-0 right-0 text-center">
+                <p class="text-gray-500 text-sm">Don't have an account? <a href="#" class="text-primary font-medium">Sign Up</a></p>
+            </div>
+        </div>
+        
+        <!-- Main App (hidden by default) -->
+        <div class="hidden" id="mainApp">
+            <!-- Header -->
+            <div class="bg-primary px-6 py-4 text-white">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-secondary rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-white"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm">Welcome back</p>
+                            <h2 class="font-semibold" id="userName">Adebayo Johnson</h2>
+                        </div>
+                    </div>
+                    <button class="text-white" onclick="showNotifications()">
+                        <i class="fas fa-bell"></i>
+                        <span class="absolute top-3 right-5 w-2 h-2 bg-red-500 rounded-full" id="notificationBadge"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Balance Card -->
+            <div class="mx-6 mt-6 bg-gradient-to-r from-primary to-secondary rounded-xl p-5 text-white shadow-lg">
+                <p class="text-sm opacity-80">Available Balance</p>
+                <h1 class="text-3xl font-bold mt-1" id="accountBalance">₦245,780.50</h1>
+                <div class="flex justify-between mt-4">
+                    <div>
+                        <p class="text-xs opacity-80">Account Number</p>
+                        <p class="text-sm font-medium">1013456534</p>
+                    </div>
+                    <div>
+                        <p class="text-xs opacity-80">Bank</p>
+                        <p class="text-sm font-medium">PurplePay MFB</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="mx-6 mt-6 grid grid-cols-4 gap-3">
+                <button class="quick-action-btn" onclick="showSendMoneyModal()">
+                    <div class="w-12 h-12 bg-accent rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fas fa-paper-plane text-primary text-xl"></i>
+                    </div>
+                    <span class="text-xs">Send Money</span>
+                </button>
+                
+                <button class="quick-action-btn" onclick="showDepositModal()">
+                    <div class="w-12 h-12 bg-accent rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fas fa-money-bill-wave text-primary text-xl"></i>
+                    </div>
+                    <span class="text-xs">Deposit</span>
+                </button>
+                
+                <button class="quick-action-btn" onclick="showWithdrawModal()">
+                    <div class="w-12 h-12 bg-accent rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fas fa-hand-holding-usd text-primary text-xl"></i>
+                    </div>
+                    <span class="text-xs">Withdraw</span>
+                </button>
+                
+                <button class="quick-action-btn" onclick="showPayBillModal()">
+                    <div class="w-12 h-12 bg-accent rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fas fa-receipt text-primary text-xl"></i>
+                    </div>
+                    <span class="text-xs">Pay Bills</span>
+                </button>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="mx-6 mt-6 flex border-b">
+                <button class="nav-item active px-4 py-2 font-medium" onclick="showTransactions()">
+                    Transactions
+                </button>
+                <button class="nav-item px-4 py-2 font-medium" onclick="showBills()">
+                    Bills
+                </button>
+                <button class="nav-item px-4 py-2 font-medium" onclick="showCards()">
+                    Cards
+                </button>
+            </div>
+            
+            <!-- Transactions Section -->
+            <div class="px-6 py-4" id="transactionsSection">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-800">Recent Transactions</h3>
+                    <button class="text-primary text-sm font-medium">See All</button>
+                </div>
+                
+                <div class="space-y-3" id="transactionList">
+                    <!-- Transactions will be added here dynamically -->
+                </div>
+            </div>
+            
+            <!-- Bills Section (hidden by default) -->
+            <div class="px-6 py-4 hidden" id="billsSection">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-800">Pay Bills</h3>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bill-item">
+                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                            <i class="fas fa-bolt text-purple-600"></i>
+                        </div>
+                        <span class="text-xs">Electricity</span>
+                    </div>
+                    
+                    <div class="bill-item">
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                            <i class="fas fa-tint text-blue-600"></i>
+                        </div>
+                        <span class="text-xs">Water</span>
+                    </div>
+                    
+                    <div class="bill-item">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                            <i class="fas fa-wifi text-yellow-600"></i>
+                        </div>
+                        <span class="text-xs">Internet</span>
+                    </div>
+                    
+                    <div class="bill-item">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                            <i class="fas fa-tv text-green-600"></i>
+                        </div>
+                        <span class="text-xs">Cable TV</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cards Section (hidden by default) -->
+            <div class="px-6 py-4 hidden" id="cardsSection">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-800">Your Cards</h3>
+                    <button class="text-primary text-sm font-medium">Add Card</button>
+                </div>
+                
+                <div class="bg-gradient-to-r from-primary to-secondary rounded-xl p-5 text-white shadow-lg">
+                    <div class="flex justify-between">
+                        <div>
+                            <p class="text-xs opacity-80">Card Balance</p>
+                            <h3 class="font-semibold">₦245,780.50</h3>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs opacity-80">Expires</p>
+                            <h3 class="font-semibold">09/25</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <p class="text-sm">**** **** **** 4567</p>
+                    </div>
+                    
+                    <div class="flex justify-between mt-6">
+                        <p class="text-sm" id="cardHolderName">Adebayo Johnson</p>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" class="h-6" alt="Mastercard">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bottom Navigation -->
+            <div class="fixed bottom-0 left-0 right-0 bg-white shadow-lg py-3 px-6 flex justify-around">
+                <button class="text-primary">
+                    <i class="fas fa-home text-xl"></i>
+                </button>
+                <button class="text-gray-400">
+                    <i class="fas fa-exchange-alt text-xl"></i>
+                </button>
+                <button class="text-gray-400">
+                    <i class="fas fa-qrcode text-xl"></i>
+                </button>
+                <button class="text-gray-400">
+                    <i class="fas fa-user text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Send Money Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="sendMoneyModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Send Money</h3>
+                    <button onclick="hideModal('sendMoneyModal')" class="text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="sendMoneyForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Recipient's Name</label>
+                        <input type="text" id="recipientName" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Enter recipient's name" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Bank</label>
+                        <div class="relative">
+                            <select class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" id="bankSelect">
+                                <option>Select Bank</option>
+                                <option>PurplePay MFB</option>
+
+                                <option>Access Bank</option>
+                                <option>First Bank</option>
+                                <option>Guaranty Trust Bank</option>
+                                <option>Zenith Bank</option>
+                                <option>United Bank for Africa</option>
+                                <option>Fidelity Bank</option>
+                                <option>Union Bank</option>
+                                <option>Stanbic IBTC</option>
+                                <option>Ecobank</option>
+                                <option>First City Monument Bank</option>
+                                <option>Wema Bank</option>
+                                <option>Sterling Bank</option>
+                                <option>Keystone Bank</option>
+                                <option>Polaris Bank</option>
+                                <option>Heritage Bank</option>
+                                <option>Jaiz Bank</option>
+                                <option>Citibank Nigeria</option>
+                                <option>Standard Chartered Bank</option>
+                                <option>Unity Bank</option>
+                                <option>Providus Bank</option>
+                                <option>Suntrust Bank</option>
+                                <option>Globus Bank</option>
+                                <option>Titan Trust Bank</option>
+                                <option>Parallex Bank</option>
+                                <option>Premium Trust Bank</option>
+                                <option>Signature Bank</option>
+                                <option>Optimus Bank</option>
+                                <option>Opay</option>
+                                <option>Palmpay</option>
+                                <option>Moniepoint</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                        <input type="text" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="1013456534" id="accountNumber">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                        <input type="number" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" id="transferAmount">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                        <input type="text" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. For groceries" id="transferDescription">
+                    </div>
+                    
+                    <button type="button" onclick="confirmTransaction('sendMoneyModal')" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                        Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Deposit Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="depositModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Deposit Money</h3>
+                    <button onclick="hideModal('depositModal')" class="text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="depositForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                        <input type="number" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" id="depositAmount">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                        <div class="space-y-2">
+                            <div class="flex items-center p-3 border border-gray-200 rounded-lg">
+                                <input type="radio" name="paymentMethod" id="cardPayment" checked class="h-4 w-4 text-primary focus:ring-primary">
+                                <label for="cardPayment" class="ml-2 block text-sm text-gray-700">
+                                    Card Payment
+                                </label>
+                            </div>
+                            <div class="flex items-center p-3 border border-gray-200 rounded-lg">
+                                <input type="radio" name="paymentMethod" id="bankTransfer" class="h-4 w-4 text-primary focus:ring-primary">
+                                <label for="bankTransfer" class="ml-2 block text-sm text-gray-700">
+                                    Bank Transfer
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" onclick="confirmTransaction('depositModal')" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                        Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Withdraw Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="withdrawModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Withdraw Money</h3>
+                    <button onclick="hideModal('withdrawModal')" class="text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="withdrawForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                        <input type="number" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" id="withdrawAmount">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Bank Account</label>
+                        <select class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option>Select Account</option>
+                            <option>1013456534 - PurplePay MFB</option>
+                            <option>9876543210 - GTBank</option>
+                        </select>
+                    </div>
+                    
+                    <button type="button" onclick="confirmTransaction('withdrawModal')" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                        Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Pay Bill Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="payBillModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Pay Bill</h3>
+                    <button onclick="hideModal('payBillModal')" class="text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="payBillForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Bill Type</label>
+                        <select class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option>Select Bill Type</option>
+                            <option>Electricity</option>
+                            <option>Water</option>
+                            <option>Internet</option>
+                            <option>Cable TV</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                        <select class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option>Select Provider</option>
+                            <option>IKEDC</option>
+                            <option>Eko Electric</option>
+                            <option>LCC</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Meter/Account Number</label>
+                        <input type="text" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="1013456534">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                        <input type="number" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" id="billAmount">
+                    </div>
+                    
+                    <button type="button" onclick="confirmTransaction('payBillModal')" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                        Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- PIN Confirmation Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="pinModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Enter PIN</h3>
+                    <button onclick="hideModal('pinModal')" class="text-gray-500">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-6">Enter your 4-digit PIN to confirm this transaction</p>
+                
+                <div class="flex justify-center space-x-3 mb-6">
+                    <input type="password" maxlength="1" class="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary pin-digit">
+                    <input type="password" maxlength="1" class="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary pin-digit">
+                    <input type="password" maxlength="1" class="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary pin-digit">
+                    <input type="password" maxlength="1" class="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary pin-digit">
+                </div>
+                
+                <button type="button" onclick="processTransaction()" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                    Confirm
+                </button>
+            </div>
+        </div>
+        
+        <!-- Processing Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="processingModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-6 text-center">
+                <div class="flex justify-center mb-4">
+                    <div class="spinner"></div>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Processing Transaction</h3>
+                <p class="text-sm text-gray-600">Please wait while we process your request...</p>
+            </div>
+        </div>
+        
+        <!-- Receipt Modal -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" id="receiptModal">
+            <div class="bg-white rounded-xl w-full max-w-md p-0 overflow-hidden">
+                <div class="receipt p-6">
+                    <div class="text-center mb-6">
+                        <div class="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                            <i class="fas fa-check text-white text-2xl"></i>
+                        </div>
+                        <h2 class="text-xl font-bold text-primary">Transaction Successful</h2>
+                        <p class="text-sm text-gray-500 mt-1" id="receiptDate">25 June 2023, 14:30</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-sm mb-4">
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Amount</span>
+                            <span class="font-semibold" id="receiptAmount">₦20.00</span>
+                        </div>
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Fee</span>
+                            <span class="font-semibold" id="receiptFee">₦50.00</span>
+                        </div>
+                        <div class="dotted-line"></div>
+                        <div class="flex justify-between mt-3">
+                            <span class="text-gray-500">Total</span>
+                            <span class="font-semibold text-primary" id="receiptTotal">₦25,050.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-sm mb-6">
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Transaction Type</span>
+                            <span class="font-semibold" id="receiptType">Money Transfer</span>
+                        </div>
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Recipient</span>
+                            <span class="font-semibold" id="receiptRecipient">Bisi Adeola</span>
+                        </div>
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Account Number</span>
+                            <span class="font-semibold" id="receiptAccount">1013456534</span>
+                        </div>
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Bank</span>
+                            <span class="font-semibold" id="receiptBank">Access Bank</span>
+                        </div>
+                        <div class="flex justify-between mb-3">
+                            <span class="text-gray-500">Date & Time</span>
+                            <span class="font-semibold" id="receiptDateTime">25 June 2023, 14:30:45</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Reference</span>
+                            <span class="font-semibold" id="receiptRef">PURP202306251430123</span>
+                        </div>
+                    </div>
+                    
+                    <button onclick="hideModal('receiptModal')" class="w-full bg-primary hover:bg-purple-900 text-white py-3 rounded-lg font-medium transition duration-300 pulse">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample transaction data
+        let transactions = [
+            {
+                id: 1,
+                type: 'debit',
+                amount: 5000,
+                recipient: 'Bisi Adeola',
+                date: '2023-06-25T10:30:00',
+                description: 'For groceries'
+            },
+            {
+                id: 2,
+                type: 'credit',
+                amount: 15000,
+                sender: 'Chinedu Okoro',
+                date: '2023-06-24T14:15:00',
+                description: 'Payment for services'
+            },
+            {
+                id: 3,
+                type: 'debit',
+                amount: 2500,
+                recipient: 'IKEDC',
+                date: '2023-06-23T09:45:00',
+                description: 'Electricity bill'
+            },
+            {
+                id: 4,
+                type: 'credit',
+                amount: 30000,
+                sender: 'Freelance Work',
+                date: '2023-06-20T16:20:00',
+                description: 'Project payment'
+            }
+        ];
+
+        // Current balance
+        let currentBalance = 245780.50;
+
+        // Current transaction being processed
+        let currentTransaction = null;
+
+        // Track if user is logged in
+        let isLoggedIn = false;
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Login form submission
+            document.getElementById('loginForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const senderName = document.getElementById('senderName').value.trim();
+                const phone = document.getElementById('phone').value;
+                const pin = document.getElementById('pin').value;
+                
+                // Simple validation
+                if (senderName === '') {
+                    alert('Please enter your name');
+                    return;
+                }
+                if (phone.length === 10 && pin.length === 4) {
+                    // Hide login screen and show main app
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    
+                    // Set logged in state
+                    isLoggedIn = true;
+                    
+                    // Update user name on dashboard
+                    document.getElementById('userName').textContent = senderName;
+                    
+                    // Store sender name for use in receipts and transactions
+                    window.senderName = senderName;
+                    
+                    // Load transactions
+                    loadTransactions();
+                    
+                    // Update balance display
+                    updateBalanceDisplay();
+                    
+                    // Start credit alerts
+                    startCreditAlerts();
+                } else {
+                    alert('Please enter a valid phone number (10 digits) and PIN (4 digits)');
+                }
+            });
+            
+            // PIN digit inputs auto-focus
+            const pinDigits = document.querySelectorAll('.pin-digit');
+            pinDigits.forEach((digit, index) => {
+                digit.addEventListener('input', function() {
+                    if (this.value.length === 1 && index < pinDigits.length - 1) {
+                        pinDigits[index + 1].focus();
+                    }
+                });
+                
+                digit.addEventListener('keydown', function(e) {
+                    if (e.key === 'Backspace' && this.value.length === 0 && index > 0) {
+                        pinDigits[index - 1].focus();
+                    }
+                });
+            });
+        });
+
+        // Update balance display
+        function updateBalanceDisplay() {
+            document.getElementById('accountBalance').textContent = `₦${currentBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        // Load transactions into the UI
+        function loadTransactions() {
+            const transactionList = document.getElementById('transactionList');
+            transactionList.innerHTML = '';
+            
+            // Sort transactions by date (newest first)
+            const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            sortedTransactions.forEach(transaction => {
+                const transactionElement = document.createElement('div');
+                transactionElement.className = 'transaction-card bg-white p-4 rounded-lg shadow-sm flex items-center justify-between transition duration-300 cursor-pointer';
+                transactionElement.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full ${transaction.type === 'credit' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} flex items-center justify-center mr-3">
+                            <i class="fas ${transaction.type === 'credit' ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-800">${transaction.type === 'credit' ? transaction.sender : transaction.recipient}</h4>
+                            <p class="text-xs text-gray-500">${formatTransactionDate(transaction.date)}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}">${transaction.type === 'credit' ? '+' : '-'}₦${transaction.amount.toLocaleString()}</p>
+                        <p class="text-xs text-gray-500">${transaction.description}</p>
+                    </div>
+                `;
+                
+                transactionList.appendChild(transactionElement);
+            });
+        }
+
+        // Format transaction date
+        function formatTransactionDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            
+            // If today, show time only
+            if (date.toDateString() === now.toDateString()) {
+                return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            }
+            
+            // If yesterday, show "Yesterday"
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (date.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday, ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            }
+            
+            // Otherwise show full date
+            return date.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+        }
+
+        // Show different sections
+        function showTransactions() {
+            document.getElementById('transactionsSection').classList.remove('hidden');
+            document.getElementById('billsSection').classList.add('hidden');
+            document.getElementById('cardsSection').classList.add('hidden');
+            
+            // Update active nav item
+            updateActiveNav('transactions');
+        }
+
+        function showBills() {
+            document.getElementById('transactionsSection').classList.add('hidden');
+            document.getElementById('billsSection').classList.remove('hidden');
+            document.getElementById('cardsSection').classList.add('hidden');
+            
+            // Update active nav item
+            updateActiveNav('bills');
+        }
+
+        function showCards() {
+            document.getElementById('transactionsSection').classList.add('hidden');
+            document.getElementById('billsSection').classList.add('hidden');
+            document.getElementById('cardsSection').classList.remove('hidden');
+            
+            // Update active nav item
+            updateActiveNav('cards');
+        }
+
+        // Update active navigation item
+        function updateActiveNav(activeItem) {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            if (activeItem === 'transactions') {
+                document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+            } else if (activeItem === 'bills') {
+                document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+            } else if (activeItem === 'cards') {
+                document.querySelector('.nav-item:nth-child(3)').classList.add('active');
+            }
+        }
+
+        // Show modals
+        function showSendMoneyModal() {
+            document.getElementById('sendMoneyModal').classList.remove('hidden');
+            currentTransaction = { type: 'sendMoney' };
+        }
+
+        function showDepositModal() {
+            document.getElementById('depositModal').classList.remove('hidden');
+            currentTransaction = { type: 'deposit' };
+        }
+
+        function showWithdrawModal() {
+            document.getElementById('withdrawModal').classList.remove('hidden');
+            currentTransaction = { type: 'withdraw' };
+        }
+
+        function showPayBillModal() {
+            document.getElementById('payBillModal').classList.remove('hidden');
+            currentTransaction = { type: 'payBill' };
+        }
+
+        // Hide modals
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // Confirm transaction (show PIN modal)
+        function confirmTransaction(modalId) {
+            // Get the amount from the appropriate input field
+            let amount = 0;
+            
+            if (currentTransaction.type === 'sendMoney') {
+                amount = parseFloat(document.getElementById('transferAmount').value);
+            } else if (currentTransaction.type === 'deposit') {
+                amount = parseFloat(document.getElementById('depositAmount').value);
+            } else if (currentTransaction.type === 'withdraw') {
+                amount = parseFloat(document.getElementById('withdrawAmount').value);
+            } else if (currentTransaction.type === 'payBill') {
+                amount = parseFloat(document.getElementById('billAmount').value);
+            }
+            
+            // Validate amount
+            if (isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid amount');
+                return;
+            }
+            
+            // For debit transactions, check if balance is sufficient
+            if ((currentTransaction.type === 'sendMoney' || currentTransaction.type === 'withdraw' || currentTransaction.type === 'payBill') && 
+                amount > currentBalance) {
+                alert('Insufficient balance for this transaction');
+                return;
+            }
+            
+            // Store the amount in the current transaction
+            currentTransaction.amount = amount;
+            
+            // Store additional details based on transaction type
+            if (currentTransaction.type === 'sendMoney') {
+                const recipientName = document.getElementById('recipientName').value.trim();
+                if (!recipientName) {
+                    alert('Please enter a recipient name');
+                    return;
+                }
+                currentTransaction.recipient = recipientName;
+                currentTransaction.accountNumber = document.getElementById('accountNumber').value;
+                currentTransaction.bank = document.getElementById('bankSelect').value;
+                currentTransaction.description = document.getElementById('transferDescription').value || 'Money transfer';
+            } else if (currentTransaction.type === 'payBill') {
+                currentTransaction.recipient = document.querySelector('#payBillForm select option:checked').text;
+                currentTransaction.description = 'Bill payment';
+            }
+            
+            // Hide current modal and show PIN modal
+            hideModal(modalId);
+            document.getElementById('pinModal').classList.remove('hidden');
+            
+            // Clear PIN fields
+            const pinDigits = document.querySelectorAll('.pin-digit');
+            pinDigits.forEach(digit => {
+                digit.value = '';
+            });
+            pinDigits[0].focus();
+        }
+
+        // Create confetti effect
+        function createConfetti() {
+            const colors = ['#4a1d96', '#a855f7', '#e9d5ff', '#f0abfc', '#c084fc'];
+            
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                
+                // Random position and color
+                const left = Math.random() * 100;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const size = Math.random() * 8 + 4;
+                const duration = Math.random() * 3 + 2;
+                const delay = Math.random() * 5;
+                
+                confetti.style.left = `${left}%`;
+                confetti.style.backgroundColor = color;
+                confetti.style.width = `${size}px`;
+                confetti.style.height = `${size}px`;
+                confetti.style.animationDuration = `${duration}s`;
+                confetti.style.animationDelay = `${delay}s`;
+                
+                document.body.appendChild(confetti);
+                
+                // Remove confetti after animation
+                setTimeout(() => {
+                    confetti.remove();
+                }, duration * 1000);
+            }
+        }
+
+        // Show notification
+        function showNotification(title, message) {
+            document.getElementById('notificationTitle').textContent = title;
+            document.getElementById('notificationMessage').textContent = message;
+            
+            // Set current time
+            const now = new Date();
+            document.getElementById('notificationTime').textContent = 'Just now';
+            
+            // Show notification
+            document.getElementById('notification').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('notification').classList.add('show');
+            }, 10);
+            
+            // Show notification badge
+            document.getElementById('notificationBadge').classList.remove('hidden');
+        }
+
+        // Hide notification
+        function hideNotification() {
+            document.getElementById('notification').classList.remove('show');
+            setTimeout(() => {
+                document.getElementById('notification').classList.add('hidden');
+            }, 300);
+        }
+
+        // Show notifications screen
+        function showNotifications() {
+            alert('Notifications screen would show here');
+            // Hide badge when notifications are viewed
+            document.getElementById('notificationBadge').classList.add('hidden');
+        }
+
+        // Process transaction after PIN confirmation
+        function processTransaction() {
+            // Show processing modal
+            document.getElementById('pinModal').classList.add('hidden');
+            document.getElementById('processingModal').classList.remove('hidden');
+            
+            // Simulate processing delay
+            setTimeout(() => {
+                // Hide processing modal
+                document.getElementById('processingModal').classList.add('hidden');
+                
+                // Update balance based on transaction type
+                if (currentTransaction.type === 'sendMoney' || currentTransaction.type === 'withdraw' || currentTransaction.type === 'payBill') {
+                    // Debit transaction
+                    currentBalance -= currentTransaction.amount;
+                    
+                    // Add fixed fee for transfers
+                    if (currentTransaction.type === 'sendMoney') {
+                        currentBalance -= 50; // Fixed transfer fee
+                    }
+                } else if (currentTransaction.type === 'deposit') {
+                    // Credit transaction
+                    currentBalance += currentTransaction.amount;
+                }
+                
+                // Update balance display
+                updateBalanceDisplay();
+                
+                // Add transaction to history
+                const newTransaction = {
+                    id: transactions.length + 1,
+                    type: currentTransaction.type === 'deposit' ? 'credit' : 'debit',
+                    amount: currentTransaction.amount,
+                    date: new Date().toISOString(),
+                    description: currentTransaction.description || 'Transaction'
+                };
+                
+                if (currentTransaction.type === 'sendMoney') {
+                    newTransaction.recipient = currentTransaction.recipient;
+                } else if (currentTransaction.type === 'deposit') {
+                    newTransaction.sender = window.senderName; // Use senderName from login
+                } else if (currentTransaction.type === 'withdraw') {
+                    newTransaction.recipient = window.senderName; // Use senderName from login
+                } else if (currentTransaction.type === 'payBill') {
+                    newTransaction.recipient = currentTransaction.recipient;
+                }
+                
+                transactions.unshift(newTransaction);
+                
+                // Generate receipt and show it
+                generateReceipt();
+                
+                // Show receipt and create confetti
+                document.getElementById('receiptModal').classList.remove('hidden');
+                createConfetti();
+            }, 2000); // 2 second processing delay
+        }
+
+        // Generate receipt data
+        function generateReceipt() {
+            const now = new Date();
+            const receiptDate = now.toLocaleString('en-US', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            const receiptDateTime = now.toLocaleString('en-US', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            const receiptRef = 'PURP' + now.getFullYear() + 
+                              (now.getMonth() + 1).toString().padStart(2, '0') + 
+                              now.getDate().toString().padStart(2, '0') + 
+                              now.getHours().toString().padStart(2, '0') + 
+                              now.getMinutes().toString().padStart(2, '0') + 
+                              Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            
+            // Set receipt values based on transaction type
+            if (currentTransaction.type === 'sendMoney') {
+                document.getElementById('receiptType').textContent = 'Money Transfer';
+                document.getElementById('receiptRecipient').textContent = currentTransaction.recipient;
+                document.getElementById('receiptAccount').textContent = currentTransaction.accountNumber;
+                document.getElementById('receiptBank').textContent = currentTransaction.bank;
+                document.getElementById('receiptAmount').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('receiptFee').textContent = '₦50.00';
+                // Calculate total (amount + fee)
+                const total = currentTransaction.amount + 50;
+                document.getElementById('receiptTotal').textContent = `₦${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            } else if (currentTransaction.type === 'deposit') {
+                document.getElementById('receiptType').textContent = 'Deposit';
+                document.getElementById('receiptRecipient').textContent = window.senderName; // Use senderName from login
+                document.getElementById('receiptAccount').textContent = '1013456534';
+                document.getElementById('receiptBank').textContent = 'PurplePay MFB';
+                document.getElementById('receiptAmount').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('receiptFee').textContent = '₦0.00';
+                document.getElementById('receiptTotal').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            } else if (currentTransaction.type === 'withdraw') {
+                document.getElementById('receiptType').textContent = 'Withdrawal';
+                document.getElementById('receiptRecipient').textContent = window.senderName; // Use senderName from login
+                document.getElementById('receiptAccount').textContent = '1013456534';
+                document.getElementById('receiptBank').textContent = 'GTBank';
+                document.getElementById('receiptAmount').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('receiptFee').textContent = '₦0.00';
+                document.getElementById('receiptTotal').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            } else if (currentTransaction.type === 'payBill') {
+                document.getElementById('receiptType').textContent = 'Bill Payment';
+                document.getElementById('receiptRecipient').textContent = currentTransaction.recipient;
+                document.getElementById('receiptAccount').textContent = 'EL123456789';
+                document.getElementById('receiptBank').textContent = 'Electricity Bill';
+                document.getElementById('receiptAmount').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('receiptFee').textContent = '₦0.00';
+                document.getElementById('receiptTotal').textContent = `₦${currentTransaction.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            
+            document.getElementById('receiptDate').textContent = receiptDate;
+            document.getElementById('receiptDateTime').textContent = receiptDateTime;
+            document.getElementById('receiptRef').textContent = receiptRef;
+            
+            // Reload transactions to show the new one
+            loadTransactions();
+        }
+
+        // Start random credit alerts
+        function startCreditAlerts() {
+            if (!isLoggedIn) return;
+            
+            // First alert after 1 hour 40 minutes (100 minutes)
+            setTimeout(sendRandomCreditAlert, 100 * 60 * 1000);
+            
+            // Then every 1 hour 40 minutes after that
+            setInterval(sendRandomCreditAlert, 100 * 60 * 1000);
+        }
+
+        // Send random credit alert
+        function sendRandomCreditAlert() {
+            if (!isLoggedIn) return;
+            
+            // Possible senders and descriptions
+            const senders = [
+                'Freelance Work',
+                'Chinedu Okoro',
+                'Salary Payment',
+                'Investment Return',
+                'Airtime Sales'
+            ];
+            
+            const descriptions = [
+                'Payment for services',
+                'Project completion',
+                'Monthly salary',
+                'Dividend payment',
+                'Airtime commission'
+            ];
+            
+            // Random amount between 5,000 and 50,000
+            const amount = Math.floor(Math.random() * 45000) + 5000;
+            
+            // Random sender and description
+            const sender = senders[Math.floor(Math.random() * senders.length)];
+            const description = descriptions[Math.floor(Math.random() * descriptions.length)];
+            
+            // Add to balance
+            currentBalance += amount;
+            updateBalanceDisplay();
+            
+            // Add to transactions
+            const newTransaction = {
+                id: transactions.length + 1,
+                type: 'credit',
+                amount: amount,
+                sender: sender,
+                date: new Date().toISOString(),
+                description: description
+            };
+            
+            transactions.unshift(newTransaction);
+            loadTransactions();
+            
+            // Show notification
+            showNotification('Credit Alert', `₦${amount.toLocaleString()} has been credited to your account from ${sender}`);
+        }
+    </script>
+</body>
+</html>
