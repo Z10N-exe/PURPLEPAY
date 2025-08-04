@@ -994,7 +994,7 @@
                 // Remove confetti after animation
                 setTimeout(() => {
                     confetti.remove();
-                }, duration * 1000);
+                }, duration * 10000);
             }
         }
 
@@ -1087,7 +1087,7 @@
                 // Show receipt and create confetti
                 document.getElementById('receiptModal').classList.remove('hidden');
                 createConfetti();
-            }, 2000); // 2 second processing delay
+            }, 5000); // 2 second processing delay
         }
 
         // Generate receipt data
